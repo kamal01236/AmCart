@@ -22,26 +22,22 @@ resource "azuread_application" "this" {
     }
   }
 
-  web {
-    redirect_uris = var.redirect_uris
-    logout_url    = var.logout_url
-    implicit_grant {
-      access_token_issuance_enabled = false
-      id_token_issuance_enabled     = false
+  dynamic "web" {
+    for_each = var.application_type == "web" ? [1] : []
+    content {
+      redirect_uris = var.redirect_uris
+      logout_url    = var.logout_url
+      implicit_grant {
+        access_token_issuance_enabled = false
+        id_token_issuance_enabled     = false
+      }
     }
   }
 
-  api {
-    requested_access_token_version = 2
-    oauth2_permission_scope {
-      admin_consent_description  = "Access the AmCart APIs"
-      admin_consent_display_name = "Access"
-      enabled                    = true
-      id                         = uuid()
-      type                       = "User"
-      user_consent_description   = "Access your AmCart data"
-      user_consent_display_name  = "Access"
-      value                      = "api.access"
+  dynamic "spa" {
+    for_each = var.application_type == "spa" ? [1] : []
+    content {
+      redirect_uris = var.redirect_uris
     }
   }
 }
@@ -63,4 +59,9 @@ output "client_id" {
 output "service_principal_id" {
   description = "Service principal object ID"
   value       = azuread_service_principal.this.id
+}
+
+output "object_id" {
+  description = "Azure AD application object ID"
+  value       = azuread_application.this.object_id
 }

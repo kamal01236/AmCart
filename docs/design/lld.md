@@ -6,9 +6,9 @@
 - Ingress and rate limiting: deployment/kubernetes/ingress/.
 
 ## Identity & Access Configuration
-- Azure AD app registrations (SPA + APIs) and Azure AD B2C tenant settings are managed via Terraform modules under infrastructure/modules/identity/.
-- SPA uses Authorization Code + PKCE against Azure AD/AD B2C; configuration (client IDs, scopes, redirect URIs) is injected via Angular environment files sourced from ConfigMaps/Key Vault references.
-- AKS workloads authenticate to Azure resources (Key Vault, storage, databases) using managed identities defined per namespace; GitHub Actions uses OIDC federation to obtain short-lived Azure tokens for deployments.
+- Azure AD app registrations (SPA + APIs) and Azure AD B2C tenant settings are managed via [infrastructure/global/aad/main.tf](infrastructure/global/aad/main.tf), which composes modules under infrastructure/modules/identity/ and is parameterized through environment overlays (e.g., [infrastructure/environments/dev-global.tfvars](infrastructure/environments/dev-global.tfvars)).
+- SPA uses Authorization Code + PKCE against Azure AD/AD B2C; configuration (client IDs, scopes, redirect URIs, authority) is injected via Angular environment files sourced from Key Vault secrets named `aad-*-<env>` that Terraform can populate automatically.
+- AKS workloads authenticate to Azure resources (Key Vault, storage, databases) using managed identities defined per namespace; the per-region Terraform at [infrastructure/regions/eastus/identity/main.tf](infrastructure/regions/eastus/identity/main.tf) and [infrastructure/regions/westeurope/identity/main.tf](infrastructure/regions/westeurope/identity/main.tf) creates `mi-amcart-<service>-<env>-<region>` identities. GitHub Actions uses OIDC federation to obtain short-lived Azure tokens for deployments through the `amcart-ci` app registration.
 
 ## Azure Infrastructure Components
 - Terraform regional stacks live under infrastructure/regions/eastus and infrastructure/regions/westeurope, each provisioning hub-and-spoke networking, AKS (managed identity, Azure CNI, AGIC/App Gateway), Azure Database for PostgreSQL Flexible Server, Azure Cache for Redis, Azure Event Hubs for Kafka-compatible messaging, Key Vault per domain, and paired Log Analytics + Application Insights.

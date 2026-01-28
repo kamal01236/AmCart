@@ -16,6 +16,11 @@ Microsoft Entra ID (Azure AD) provides identities for admins/operators and CI/CD
 
 Terraform provisions each registration, exports client IDs, and wires redirect URIs. Secrets are not issued; managed identities and OIDC are preferred.
 
+### Terraform Implementation
+- Global Azure AD resources live in [infrastructure/global/aad/main.tf](infrastructure/global/aad/main.tf) and are parameterized via environment overlays (e.g., [infrastructure/environments/dev-global.tfvars](infrastructure/environments/dev-global.tfvars)).
+- Regional managed identities are created per-region in [infrastructure/regions/eastus/identity/main.tf](infrastructure/regions/eastus/identity/main.tf) and [infrastructure/regions/westeurope/identity/main.tf](infrastructure/regions/westeurope/identity/main.tf), fed by the shared `service_managed_identities` map inside each regional tfvars file.
+- Key Vault secret names follow the pattern `aad-<descriptor>-<env>` (see below) so services can pull client IDs and scope URIs without code changes.
+
 ## SPA Configuration (Angular)
 - Use MSAL.js with Authorization Code + PKCE against Azure AD B2C user flows.
 - Required configuration keys (provided via ConfigMap/Key Vault):
@@ -40,7 +45,14 @@ Terraform provisions each registration, exports client IDs, and wires redirect U
 - Customers leverage Azure AD B2C built-in MFA or SMS/email OTP flows depending on regulatory needs.
 
 ## Key Vault Integration
-- Store connection strings, certificates, and third-party secrets in per-service Key Vault instances.
+- Store connection strings, certificates, and third-party secrets in per-service Key Vault instances. The global AAD stack can optionally write secrets into the shared Key Vault specified via `config_key_vault_id`.
+- Secret naming (per environment):
+	- `aad-spa-client-id-<env>` / `aad-spa-application-id-<env>`
+	- `aad-api-client-id-<env>` / `aad-api-application-id-<env>`
+	- `aad-api-app-id-uri-<env>`
+	- `aad-ci-client-id-<env>`
+	- `aad-b2c-authority-<env>`
+	- `aad-scope-<scope>-<env>` (e.g., `aad-scope-catalog-read-dev`)
 - AKS workloads access secrets via CSI driver using managed identities; no secrets in environment variables or GitHub.
 
 ## Required Terraform Inputs

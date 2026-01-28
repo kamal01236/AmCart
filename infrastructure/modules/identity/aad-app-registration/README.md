@@ -7,8 +7,21 @@ module "amcart_api_app" {
   source           = "../../modules/identity/aad-app-registration"
   display_name     = "amcart-api"
   identifier_uris  = ["api://amcart-api"]
+  application_type = "web"
   redirect_uris    = ["https://dev.amcart.com/auth/callback"]
   logout_url       = "https://dev.amcart.com/logout"
   sign_in_audience = "AzureADMyOrg"
+}
+
+# SPA example
+module "amcart_spa_app" {
+  source           = "../../modules/identity/aad-app-registration"
+  display_name     = "amcart-spa"
+  application_type = "spa"
+  redirect_uris    = [
+    "https://dev.amcart.com/auth/callback",
+    "http://localhost:4200/auth/callback"
+  ]
+  sign_in_audience = "AzureADandPersonalMicrosoftAccount"
 }
 ```

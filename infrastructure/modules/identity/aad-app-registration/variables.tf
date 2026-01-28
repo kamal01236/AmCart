@@ -26,3 +26,13 @@ variable "sign_in_audience" {
   type        = string
   default     = "AzureADMultipleOrgs"
 }
+
+variable "application_type" {
+  description = "Type of application to configure (web or spa)"
+  type        = string
+  default     = "web"
+  validation {
+    condition     = contains(["web", "spa"], var.application_type)
+    error_message = "application_type must be either 'web' or 'spa'."
+  }
+}

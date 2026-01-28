@@ -26,15 +26,17 @@ Users will not access backend services directly.
 
 1.3 Security Assumptions
 
-OAuth 2.0 / OpenID Connect is acceptable for authentication.
+OAuth 2.0 / OpenID Connect with Microsoft Entra ID (Azure AD) is the standard for authentication.
 
-An external Identity Provider (Auth0) is allowed.
+Azure AD B2C hosts customer identities; Azure AD (core tenant) hosts admins, service principals, and managed identities.
 
 All external communication must use HTTPS.
 
 Backend services trust the API Gateway, not the client.
 
 Authorization decisions are enforced at the API Gateway and service level.
+
+GitHub Actions uses OIDC federation with Azure AD—no long-lived secrets.
 
 1.4 Data & Consistency Assumptions
 

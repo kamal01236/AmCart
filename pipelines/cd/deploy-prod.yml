@@ -1,1 +1,353 @@
 # Deploy Prod CD Pipeline
+
+name: Deploy Prod (Multi-Region)
+
+on:
+	workflow_call:
+		inputs:
+			releaseTag:
+				description: OCI/Helm tag promoted from staging
+				required: true
+				type: string
+			commitSha:
+				description: Git commit hash for traceability
+				required: true
+				type: string
+			changeTicket:
+				description: ITSM/Change ticket ID recorded in deployment evidence
+				required: true
+				type: string
+		secrets:
+			azureCredentials:
+				required: true
+
+permissions:
+	id-token: write
+	contents: read
+	actions: read
+
+env:
+	ENVIRONMENT: prod
+	STATE_KEY_EASTUS: prod/eastus/infra.tfstate
+	STATE_KEY_WESTEUROPE: prod/westeurope/infra.tfstate
+	TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+	TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+	TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+	HELM_CHART_PATH: deployment/kubernetes/charts/platform
+	HELM_RELEASE_NAME: amcart
+	HELM_NAMESPACE: platform
+	IMAGE_PULL_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+	TRAFFIC_MANAGER_PROFILE: ${{ vars.TRAFFIC_MANAGER_PROFILE }}
+	TRAFFIC_MANAGER_RG: ${{ vars.TRAFFIC_MANAGER_RESOURCE_GROUP }}
+
+jobs:
+	plan-eastus:
+		name: Terraform plan (eastus)
+		runs-on: ubuntu-latest
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: eastus
+			TF_STATE_KEY: ${{ env.STATE_KEY_EASTUS }}
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Setup Terraform
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (eastus)
+				working-directory: infrastructure/regions/eastus
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Terraform fmt & validate (eastus)
+				working-directory: infrastructure/regions/eastus
+				run: |
+					terraform fmt -recursive -check
+					terraform validate
+
+			- name: Terraform plan (eastus)
+				working-directory: infrastructure/regions/eastus
+				run: terraform plan -var-file=../../environments/prod-eastus.tfvars -out=tfplan
+
+			- name: Upload plan artifact (eastus)
+				uses: actions/upload-artifact@v4
+				with:
+					name: tfplan-eastus
+					path: infrastructure/regions/eastus/tfplan
+
+			- name: Record change ticket metadata
+				run: |
+					echo "changeTicket=${{ inputs.changeTicket }}" >> $GITHUB_STEP_SUMMARY
+					echo "releaseTag=${{ inputs.releaseTag }}" >> $GITHUB_STEP_SUMMARY
+
+	apply-eastus:
+		name: Apply + Helm (eastus)
+		runs-on: ubuntu-latest
+		needs: plan-eastus
+		environment: prod-eastus
+		concurrency: infra-prod-eastus
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: eastus
+			TF_STATE_KEY: ${{ env.STATE_KEY_EASTUS }}
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Download plan artifact
+				uses: actions/download-artifact@v4
+				with:
+					name: tfplan-eastus
+					path: infrastructure/regions/eastus
+
+			- name: Setup Terraform
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (eastus)
+				working-directory: infrastructure/regions/eastus
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Drain westeurope to 10%
+				run: |
+					az network traffic-manager endpoint update \
+						--resource-group ${{ env.TRAFFIC_MANAGER_RG }} \
+						--profile-name ${{ env.TRAFFIC_MANAGER_PROFILE }} \
+						--name westeurope \
+						--type externalEndpoints \
+						--weight 10
+
+			- name: Terraform apply (eastus)
+				working-directory: infrastructure/regions/eastus
+				run: terraform apply -auto-approve tfplan
+
+			- name: Set AKS context (eastus)
+				uses: azure/aks-set-context@v4
+				with:
+					resource-group: ${{ vars.AKS_EASTUS_RESOURCE_GROUP }}
+					cluster-name: ${{ vars.AKS_EASTUS_CLUSTER_NAME }}
+
+			- name: Install Helm
+				uses: azure/setup-helm@v4
+
+			- name: Deploy workloads with Helm (eastus)
+				run: |
+					helm upgrade --install ${{ env.HELM_RELEASE_NAME }}-${{ env.REGION }} ${{ env.HELM_CHART_PATH }} \
+						--namespace ${{ env.HELM_NAMESPACE }}-${{ env.REGION }} \
+						--create-namespace \
+						-f deployment/kubernetes/values/${{ env.ENVIRONMENT }}-${{ env.REGION }}.yaml \
+						--set global.region=${{ env.REGION }} \
+						--set global.environment=${{ env.ENVIRONMENT }} \
+						--set image.tag=${{ inputs.releaseTag }} \
+						--set image.registry=${{ env.IMAGE_PULL_REGISTRY }}
+
+	verify-eastus:
+		name: eastus health verification
+		runs-on: ubuntu-latest
+		needs: apply-eastus
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Run synthetic tests
+				run: |
+					chmod +x scripts/health-check.sh
+					scripts/health-check.sh --region eastus --environment prod
+
+			- name: Restore westeurope weight to 30%
+				run: |
+					az network traffic-manager endpoint update \
+						--resource-group ${{ env.TRAFFIC_MANAGER_RG }} \
+						--profile-name ${{ env.TRAFFIC_MANAGER_PROFILE }} \
+						--name westeurope \
+						--type externalEndpoints \
+						--weight 30
+
+	plan-westeurope:
+		name: Terraform plan (westeurope)
+		runs-on: ubuntu-latest
+		needs: verify-eastus
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: westeurope
+			TF_STATE_KEY: ${{ env.STATE_KEY_WESTEUROPE }}
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Setup Terraform
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Terraform fmt & validate (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: |
+					terraform fmt -recursive -check
+					terraform validate
+
+			- name: Terraform plan (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: terraform plan -var-file=../../environments/prod-westeurope.tfvars -out=tfplan
+
+			- name: Upload plan artifact (westeurope)
+				uses: actions/upload-artifact@v4
+				with:
+					name: tfplan-westeurope
+					path: infrastructure/regions/westeurope/tfplan
+
+	apply-westeurope:
+		name: Apply + Helm (westeurope)
+		runs-on: ubuntu-latest
+		needs: plan-westeurope
+		environment: prod-westeurope
+		concurrency: infra-prod-westeurope
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: westeurope
+			TF_STATE_KEY: ${{ env.STATE_KEY_WESTEUROPE }}
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Download plan artifact
+				uses: actions/download-artifact@v4
+				with:
+					name: tfplan-westeurope
+					path: infrastructure/regions/westeurope
+
+			- name: Setup Terraform
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Drain westeurope to 0%
+				run: |
+					az network traffic-manager endpoint update \
+						--resource-group ${{ env.TRAFFIC_MANAGER_RG }} \
+						--profile-name ${{ env.TRAFFIC_MANAGER_PROFILE }} \
+						--name westeurope \
+						--type externalEndpoints \
+						--weight 0
+
+			- name: Terraform apply (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: terraform apply -auto-approve tfplan
+
+			- name: Set AKS context (westeurope)
+				uses: azure/aks-set-context@v4
+				with:
+					resource-group: ${{ vars.AKS_WESTEUROPE_RESOURCE_GROUP }}
+					cluster-name: ${{ vars.AKS_WESTEUROPE_CLUSTER_NAME }}
+
+			- name: Install Helm
+				uses: azure/setup-helm@v4
+
+			- name: Deploy workloads with Helm (westeurope)
+				run: |
+					helm upgrade --install ${{ env.HELM_RELEASE_NAME }}-${{ env.REGION }} ${{ env.HELM_CHART_PATH }} \
+						--namespace ${{ env.HELM_NAMESPACE }}-${{ env.REGION }} \
+						--create-namespace \
+						-f deployment/kubernetes/values/${{ env.ENVIRONMENT }}-${{ env.REGION }}.yaml \
+						--set global.region=${{ env.REGION }} \
+						--set global.environment=${{ env.ENVIRONMENT }} \
+						--set image.tag=${{ inputs.releaseTag }} \
+						--set image.registry=${{ env.IMAGE_PULL_REGISTRY }}
+
+	verify-westeurope:
+		name: westeurope health verification
+		runs-on: ubuntu-latest
+		needs: apply-westeurope
+		steps:
+			- uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Run synthetic tests
+				run: |
+					chmod +x scripts/health-check.sh
+					scripts/health-check.sh --region westeurope --environment prod
+
+			- name: Restore steady-state weight (30%)
+				run: |
+					az network traffic-manager endpoint update \
+						--resource-group ${{ env.TRAFFIC_MANAGER_RG }} \
+						--profile-name ${{ env.TRAFFIC_MANAGER_PROFILE }} \
+						--name westeurope \
+						--type externalEndpoints \
+						--weight 30
+# Deploy Prod CD Pipeline

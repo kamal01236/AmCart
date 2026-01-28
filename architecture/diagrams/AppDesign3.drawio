@@ -1,0 +1,111 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.3.4" pages="2">
+  <diagram name="Architecture" id="amcart-arch-v2">
+    <mxGraphModel dx="99758" dy="62022" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1400" pageHeight="900" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="edge-1" edge="1" parent="1" source="node-user" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-dns" />
+        <mxCell id="edge-2" edge="1" parent="1" source="node-dns" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-cdn" />
+        <mxCell id="edge-3" edge="1" parent="1" source="node-cdn" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-waf" />
+        <mxCell id="edge-4" edge="1" parent="1" source="node-waf" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-lb" />
+        <mxCell id="edge-5" edge="1" parent="1" source="node-lb" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-aks" />
+        <mxCell id="edge-6" edge="1" parent="1" source="node-web" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;dashed=1;endArrow=block;" target="node-api" />
+        <mxCell id="edge-7" edge="1" parent="1" source="node-api" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;dashed=1;endArrow=block;" target="node-workers" />
+        <mxCell id="edge-8" edge="1" parent="1" source="node-api" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-db" />
+        <mxCell id="edge-9" edge="1" parent="1" source="node-api" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-cache" />
+        <mxCell id="edge-10" edge="1" parent="1" source="node-workers" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-queue" />
+        <mxCell id="edge-11" edge="1" parent="1" source="node-api" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" target="node-storage" />
+        <mxCell id="edge-12" edge="1" parent="1" source="node-aks" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;dashed=1;endArrow=block;" target="node-observability" />
+        <mxCell id="node-user" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#232F3D;fontColor=#FFFFFF;strokeColor=#1A1A1A;" value="End Users" vertex="1">
+          <mxGeometry height="60" width="120" x="40" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="node-dns" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#000000;fontColor=#FFFFFF;strokeColor=#1A1A1A;" value="DNS / Traffic Manager&#xa;Geo + Latency Routing&#xa;Health Checks" vertex="1">
+          <mxGeometry height="80" width="170" x="200" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="node-cdn" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" value="CDN&#xa;Edge Caching&#xa;TLS Termination" vertex="1">
+          <mxGeometry height="80" width="150" x="400" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="node-waf" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;" value="WAF + DDoS&#xa;Bot Protection" vertex="1">
+          <mxGeometry height="80" width="150" x="580" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="node-lb" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;" value="Regional Ingress / LB&#xa;Health Probes&#xa;Path Routing" vertex="1">
+          <mxGeometry height="80" width="190" x="760" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="node-aks" parent="1" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" value="AKS Cluster&#xa;Multi-node pools" vertex="1">
+          <mxGeometry height="260" width="630" x="320" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="node-web" parent="node-aks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="Web Frontend Pods&#xa;(SPA)" vertex="1">
+          <mxGeometry height="70" width="170" x="20" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="node-api" parent="node-aks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="API Pods&#xa;REST/GraphQL" vertex="1">
+          <mxGeometry height="70" width="170" x="220" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="node-workers" parent="node-aks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="Worker Pods&#xa;Queues + Jobs" vertex="1">
+          <mxGeometry height="70" width="170" x="420" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="node-service-mesh" parent="node-aks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" value="Service Mesh&#xa;mTLS + retries" vertex="1">
+          <mxGeometry height="60" width="170" x="220" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="node-db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;" value="Managed Database&#xa;PostgreSQL" vertex="1">
+          <mxGeometry height="70" width="170" x="1010" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="node-cache" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;" value="Cache&#xa;Redis" vertex="1">
+          <mxGeometry height="70" width="170" x="1010" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="node-queue" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;" value="Message Queue&#xa;Service Bus" vertex="1">
+          <mxGeometry height="70" width="170" x="1010" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="node-storage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;" value="Object Storage&#xa;Images + Assets" vertex="1">
+          <mxGeometry height="70" width="170" x="1010" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="node-observability" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6E6E6;strokeColor=#666666;" value="Observability&#xa;Logs + Metrics + Traces" vertex="1">
+          <mxGeometry height="70" width="220" x="600" y="680" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Deployment" id="amcart-deploy-v1">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1400" pageHeight="900" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- Pipeline edges -->
+        <mxCell id="edge-d1" edge="1" parent="1" source="node-dev" target="node-git" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d2" edge="1" parent="1" source="node-git" target="node-ci" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d3" edge="1" parent="1" source="node-ci" target="node-docker" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d4" edge="1" parent="1" source="node-docker" target="node-registry" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d5" edge="1" parent="1" source="node-registry" target="node-aks" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d6" edge="1" parent="1" source="node-aks" target="node-ingress" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <mxCell id="edge-d7" edge="1" parent="1" source="node-ingress" target="node-users" style="edgeStyle=elbowEdgeStyle;rounded=1;html=1;endArrow=block;" />
+        <!-- Nodes -->
+        <mxCell id="node-dev" value="Developer&#xa;Local IDE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#232F3D;fontColor=#FFFFFF;strokeColor=#1A1A1A;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-git" value="GitHub Repo&#xa;Source Control" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#000000;fontColor=#FFFFFF;strokeColor=#1A1A1A;" vertex="1" parent="1">
+          <mxGeometry x="220" y="120" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-ci" value="CI Pipeline&#xa;Build + Test" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" vertex="1" parent="1">
+          <mxGeometry x="420" y="120" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-docker" value="Docker Build&#xa;Image Tagging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="1">
+          <mxGeometry x="620" y="120" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-registry" value="Container Registry&#xa;ACR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;" vertex="1" parent="1">
+          <mxGeometry x="820" y="120" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-aks" value="AKS Cluster&#xa;Namespaces + Helm" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="420" y="260" width="560" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="node-ingress" value="Ingress Controller&#xa;TLS + Routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;" vertex="1" parent="node-aks">
+          <mxGeometry x="30" y="70" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-app" value="App Deployments&#xa;Web + API + Workers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="node-aks">
+          <mxGeometry x="250" y="70" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node-users" value="Users / Clients" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#232F3D;fontColor=#FFFFFF;strokeColor=#1A1A1A;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="120" width="140" height="70" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

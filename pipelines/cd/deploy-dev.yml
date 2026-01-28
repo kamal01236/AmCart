@@ -1,1 +1,225 @@
 # Deploy Dev CD Pipeline
+
+name: Deploy Dev (Multi-Region)
+
+on:
+	workflow_call:
+		inputs:
+			releaseTag:
+				description: OCI/Helm tag to deploy (e.g. 1.4.3-rc.2)
+				required: true
+				type: string
+			commitSha:
+				description: Git commit that produced the artifacts (telemetry + traceability)
+				required: true
+				type: string
+		secrets:
+			azureCredentials:
+				required: true
+
+permissions:
+	id-token: write
+	contents: read
+	actions: read
+
+env:
+	ENVIRONMENT: dev
+	STATE_KEY_EASTUS: dev/eastus/infra.tfstate
+	STATE_KEY_WESTEUROPE: dev/westeurope/infra.tfstate
+	TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+	TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+	TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+	HELM_CHART_PATH: deployment/kubernetes/charts/platform
+	HELM_RELEASE_NAME: amcart
+	HELM_NAMESPACE: platform
+	TRAFFIC_PROFILE: "70:30"
+	IMAGE_PULL_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+
+jobs:
+	terraform-helm-eastus:
+		name: eastus Terraform + Helm
+		runs-on: ubuntu-latest
+		environment: dev-eastus
+		concurrency: infra-dev-eastus
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: eastus
+			TF_STATE_KEY: ${{ env.STATE_KEY_EASTUS }}
+		steps:
+			- name: Checkout repo
+				uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Setup Terraform 1.6.x
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (eastus)
+				working-directory: infrastructure/regions/eastus
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Terraform fmt & validate (eastus)
+				working-directory: infrastructure/regions/eastus
+				run: |
+					terraform fmt -recursive -check
+					terraform validate
+
+			- name: Terraform plan (eastus)
+				id: tf-plan-eastus
+				working-directory: infrastructure/regions/eastus
+				run: terraform plan -var-file=../../environments/dev-eastus.tfvars -out=tfplan
+
+			- name: Upload plan artifact (eastus)
+				uses: actions/upload-artifact@v4
+				with:
+					name: tfplan-eastus
+					path: infrastructure/regions/eastus/tfplan
+
+			- name: Terraform apply (eastus)
+				working-directory: infrastructure/regions/eastus
+				run: terraform apply -auto-approve tfplan
+
+			- name: Capture release metadata
+				run: |
+					echo "commit=${{ inputs.commitSha }}" >> $GITHUB_STEP_SUMMARY
+					echo "releaseTag=${{ inputs.releaseTag }}" >> $GITHUB_STEP_SUMMARY
+
+			- name: Set AKS context (eastus)
+				uses: azure/aks-set-context@v4
+				with:
+					resource-group: ${{ vars.AKS_EASTUS_RESOURCE_GROUP }}
+					cluster-name: ${{ vars.AKS_EASTUS_CLUSTER_NAME }}
+
+			- name: Install Helm
+				uses: azure/setup-helm@v4
+
+			- name: Deploy workloads with Helm (eastus)
+				run: |
+					helm upgrade --install ${{ env.HELM_RELEASE_NAME }}-${{ env.REGION }} ${{ env.HELM_CHART_PATH }} \
+						--namespace ${{ env.HELM_NAMESPACE }}-${{ env.REGION }} \
+						--create-namespace \
+						-f deployment/kubernetes/values/${{ env.ENVIRONMENT }}-${{ env.REGION }}.yaml \
+						--set global.region=${{ env.REGION }} \
+						--set global.environment=${{ env.ENVIRONMENT }} \
+						--set image.tag=${{ inputs.releaseTag }} \
+						--set image.registry=${{ env.IMAGE_PULL_REGISTRY }}
+
+	verify-eastus:
+		name: eastus smoke + synthetic checks
+		runs-on: ubuntu-latest
+		needs: terraform-helm-eastus
+		steps:
+			- name: Checkout repo
+				uses: actions/checkout@v4
+
+			- name: Run health check script
+				run: |
+					chmod +x scripts/health-check.sh
+					scripts/health-check.sh --region eastus --environment dev
+
+	terraform-helm-westeurope:
+		name: westeurope Terraform + Helm
+		runs-on: ubuntu-latest
+		environment: dev-westeurope
+		concurrency: infra-dev-westeurope
+		needs: verify-eastus
+		permissions:
+			id-token: write
+			contents: read
+		env:
+			REGION: westeurope
+			TF_STATE_KEY: ${{ env.STATE_KEY_WESTEUROPE }}
+		steps:
+			- name: Checkout repo
+				uses: actions/checkout@v4
+
+			- name: Azure login (OIDC)
+				uses: azure/login@v2
+				with:
+					creds: ${{ secrets.azureCredentials }}
+
+			- name: Setup Terraform 1.6.x
+				uses: hashicorp/setup-terraform@v3
+				with:
+					terraform_version: 1.6.6
+
+			- name: Terraform init (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				env:
+					ARM_USE_OIDC: true
+					ARM_USE_AZUREAD: true
+				run: |
+					terraform init \
+						-backend-config="resource_group_name=${{ env.TFSTATE_RESOURCE_GROUP }}" \
+						-backend-config="storage_account_name=${{ env.TFSTATE_STORAGE_ACCOUNT }}" \
+						-backend-config="container_name=${{ env.TFSTATE_CONTAINER }}" \
+						-backend-config="key=${{ env.TF_STATE_KEY }}"
+
+			- name: Terraform fmt & validate (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: |
+					terraform fmt -recursive -check
+					terraform validate
+
+			- name: Terraform plan (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: terraform plan -var-file=../../environments/dev-westeurope.tfvars -out=tfplan
+
+			- name: Upload plan artifact (westeurope)
+				uses: actions/upload-artifact@v4
+				with:
+					name: tfplan-westeurope
+					path: infrastructure/regions/westeurope/tfplan
+
+			- name: Terraform apply (westeurope)
+				working-directory: infrastructure/regions/westeurope
+				run: terraform apply -auto-approve tfplan
+
+			- name: Set AKS context (westeurope)
+				uses: azure/aks-set-context@v4
+				with:
+					resource-group: ${{ vars.AKS_WESTEUROPE_RESOURCE_GROUP }}
+					cluster-name: ${{ vars.AKS_WESTEUROPE_CLUSTER_NAME }}
+
+			- name: Install Helm
+				uses: azure/setup-helm@v4
+
+			- name: Deploy workloads with Helm (westeurope)
+				run: |
+					helm upgrade --install ${{ env.HELM_RELEASE_NAME }}-${{ env.REGION }} ${{ env.HELM_CHART_PATH }} \
+						--namespace ${{ env.HELM_NAMESPACE }}-${{ env.REGION }} \
+						--create-namespace \
+						-f deployment/kubernetes/values/${{ env.ENVIRONMENT }}-${{ env.REGION }}.yaml \
+						--set global.region=${{ env.REGION }} \
+						--set global.environment=${{ env.ENVIRONMENT }} \
+						--set image.tag=${{ inputs.releaseTag }} \
+						--set image.registry=${{ env.IMAGE_PULL_REGISTRY }}
+
+	verify-westeurope:
+		name: westeurope smoke + synthetic checks
+		runs-on: ubuntu-latest
+		needs: terraform-helm-westeurope
+		steps:
+			- name: Checkout repo
+				uses: actions/checkout@v4
+
+			- name: Run health check script
+				run: |
+					chmod +x scripts/health-check.sh
+					scripts/health-check.sh --region westeurope --environment dev
+# Deploy Dev CD Pipeline

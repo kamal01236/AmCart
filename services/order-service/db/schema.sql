@@ -1,0 +1,1 @@
+-- SQL schema for order-service

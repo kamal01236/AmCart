@@ -1,0 +1,4 @@
+image:
+  repository: amcart.azurecr.io/auth-service
+  tag: latest
+environment: dev

@@ -1,0 +1,27 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34309.116
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SearchService.Api", "src\SearchService.Api.csproj", "{6017DE65-BBEB-4A10-8C65-3E65033CE8D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SearchService.Api.Tests", "tests\SearchService.Api.Tests.csproj", "{7D6B874F-CD8C-4A25-9DF4-A085A8E2C8FF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6017DE65-BBEB-4A10-8C65-3E65033CE8D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6017DE65-BBEB-4A10-8C65-3E65033CE8D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6017DE65-BBEB-4A10-8C65-3E65033CE8D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6017DE65-BBEB-4A10-8C65-3E65033CE8D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D6B874F-CD8C-4A25-9DF4-A085A8E2C8FF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D6B874F-CD8C-4A25-9DF4-A085A8E2C8FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D6B874F-CD8C-4A25-9DF4-A085A8E2C8FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D6B874F-CD8C-4A25-9DF4-A085A8E2C8FF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

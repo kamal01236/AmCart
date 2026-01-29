@@ -1,0 +1,1 @@
+-- Placeholder for Catalog Service schema managed via EF Core migrations.

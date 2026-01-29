@@ -1,7 +1,11 @@
+using System.Text;
 using System.Text.Json;
-using Azure.Messaging.EventHubs;
-using Azure.Messaging.EventHubs.Producer;
+using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OrderService.Api.Config;
 using OrderService.Api.Domain.Entities;
+using OrderService.Api.Events;
 using OrderService.Api.Repositories;
 using OrderService.Api.Transport;
 
@@ -10,12 +14,20 @@ namespace OrderService.Api.Services;
 public class OrderProcessingService : IOrderProcessingService
 {
     private readonly IOrderRepository _repository;
-    private readonly EventHubProducerClient? _producerClient;
+    private readonly IProducer<string, string> _producer;
+    private readonly KafkaOptions _kafkaOptions;
+    private readonly ILogger<OrderProcessingService> _logger;
 
-    public OrderProcessingService(IOrderRepository repository, IEnumerable<EventHubProducerClient> producerClients)
+    public OrderProcessingService(
+        IOrderRepository repository,
+        IOptions<KafkaOptions> kafkaOptions,
+        IProducer<string, string> producer,
+        ILogger<OrderProcessingService> logger)
     {
         _repository = repository;
-        _producerClient = producerClients.FirstOrDefault();
+        _kafkaOptions = kafkaOptions.Value;
+        _producer = producer;
+        _logger = logger;
     }
 
     public async Task<Order> PlaceOrderAsync(CreateOrderRequest request, CancellationToken cancellationToken = default)
@@ -43,29 +55,38 @@ public class OrderProcessingService : IOrderProcessingService
 
     private async Task PublishDomainEventAsync(Order order, CancellationToken cancellationToken)
     {
-        if (_producerClient is null)
-        {
-            return;
-        }
-
-        var payload = JsonSerializer.Serialize(new
-        {
+        var evt = new OrderPlacedEvent(
             order.Id,
             order.OrderNumber,
             order.CustomerId,
-            order.Status,
             order.TotalAmount,
+            order.Status,
             order.CreatedAtUtc,
-            Items = order.Items.Select(i => new { i.ProductId, i.Quantity, i.UnitPrice })
-        });
+            order.Items.Select(i => new OrderPlacedItem(i.ProductId, i.Quantity, i.UnitPrice)).ToArray());
 
-        using var eventBatch = await _producerClient.CreateBatchAsync(cancellationToken);
-        if (!eventBatch.TryAdd(new EventData(BinaryData.FromString(payload))))
+        var payload = JsonSerializer.Serialize(evt);
+        var message = new Message<string, string>
         {
-            throw new InvalidOperationException("Unable to enqueue order event");
-        }
+            Key = order.Id.ToString(),
+            Value = payload,
+            Headers = new Headers
+            {
+                new Header("ce_type", Encoding.UTF8.GetBytes("OrderPlaced")),
+                new Header("ce_source", Encoding.UTF8.GetBytes("order-service")),
+                new Header("ce_specversion", Encoding.UTF8.GetBytes("1.0"))
+            }
+        };
 
-        await _producerClient.SendAsync(eventBatch, cancellationToken);
+        try
+        {
+            await _producer.ProduceAsync(_kafkaOptions.OrderTopic, message, cancellationToken);
+            _logger.LogInformation("Published order event to topic {Topic} for order {OrderId}", _kafkaOptions.OrderTopic, order.Id);
+        }
+        catch (ProduceException<string, string> ex)
+        {
+            _logger.LogError(ex, "Failed to publish order event for {OrderId}", order.Id);
+            throw new InvalidOperationException("Unable to enqueue order event", ex);
+        }
     }
 
     private static string GenerateOrderNumber()

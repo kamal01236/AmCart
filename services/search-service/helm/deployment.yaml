@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: search-service
+  template:
+    metadata:
+      labels:
+        app: search-service
+    spec:
+      containers:
+        - name: search-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: AzureAd__ClientId
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-aad
+                  key: clientId
+            - name: AzureAd__TenantId
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-aad
+                  key: tenantId
+            - name: AzureAd__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-aad
+                  key: audience
+            - name: SearchIndex__Endpoint
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-index
+                  key: endpoint
+            - name: SearchIndex__IndexName
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-index
+                  key: indexName
+            - name: SearchIndex__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-index
+                  key: apiKey
+            - name: SearchIndex__Username
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-index
+                  key: username
+                  optional: true
+            - name: SearchIndex__Password
+              valueFrom:
+                secretKeyRef:
+                  name: search-service-index
+                  key: password
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30

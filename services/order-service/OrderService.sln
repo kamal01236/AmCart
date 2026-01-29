@@ -4,7 +4,7 @@ VisualStudioVersion = 17.8.34309.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrderService.Api", "src/OrderService.Api.csproj", "{5F20B5FE-3E62-4C3F-9470-08B19768AEA8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrderService.Tests", "tests/OrderService.Tests/OrderService.Tests.csproj", "{9EAF4D7D-3B33-4E2D-8E1F-43BCC7F10918}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrderService.Api.Tests", "tests/unit/OrderService.Api.Tests.csproj", "{9EAF4D7D-3B33-4E2D-8E1F-43BCC7F10918}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

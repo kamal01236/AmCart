@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog-service
+  template:
+    metadata:
+      labels:
+        app: catalog-service
+    spec:
+      containers:
+        - name: catalog-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: ConnectionStrings__Catalog
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-conn
+                  key: catalog-connection
+            - name: AzureAd__ClientId
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-aad
+                  key: clientId
+            - name: AzureAd__TenantId
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-aad
+                  key: tenantId
+            - name: AzureAd__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-aad
+                  key: audience
+            - name: Messaging__EventHubs__Namespace
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-eh
+                  key: namespace
+            - name: Messaging__EventHubs__CatalogIndexer__Name
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-service-eh
+                  key: catalogIndexer
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30

@@ -1,0 +1,4 @@
+image:
+  repository: amcart.azurecr.io/search-service
+  tag: latest
+environment: dev

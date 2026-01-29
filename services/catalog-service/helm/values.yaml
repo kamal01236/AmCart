@@ -1,0 +1,4 @@
+image:
+  repository: amcart.azurecr.io/catalog-service
+  tag: latest
+environment: dev

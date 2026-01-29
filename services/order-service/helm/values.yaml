@@ -1,1 +1,4 @@
-# values.yaml for order-service
+image:
+	repository: amcart.azurecr.io/order-service
+	tag: latest
+environment: dev

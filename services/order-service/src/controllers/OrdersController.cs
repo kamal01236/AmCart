@@ -24,14 +24,14 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> GetByNumber(string orderNumber, CancellationToken cancellationToken)
     {
         var order = await _repository.GetByNumberAsync(orderNumber, cancellationToken);
-        return order is null ? NotFound() : Ok(order);
+        return order is null ? NotFound() : Ok(order?.ToDto());
     }
 
     [HttpGet("customer/{customerId:guid}")]
     public async Task<IActionResult> GetByCustomer(Guid customerId, CancellationToken cancellationToken)
     {
         var orders = await _repository.GetByCustomerAsync(customerId, cancellationToken);
-        return Ok(orders);
+        return Ok(orders.Select(o => o.ToDto()));
     }
 
     [HttpPost]
@@ -43,6 +43,6 @@ public class OrdersController : ControllerBase
         }
 
         var order = await _orderProcessingService.PlaceOrderAsync(request, cancellationToken);
-        return CreatedAtAction(nameof(GetByNumber), new { orderNumber = order.OrderNumber }, order);
+        return CreatedAtAction(nameof(GetByNumber), new { orderNumber = order.OrderNumber }, order.ToDto());
     }
 }

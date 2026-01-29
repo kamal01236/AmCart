@@ -1,0 +1,1 @@
+-- Placeholder for Auth Service database schema. Use Entity Framework Core migrations to manage schema changes.

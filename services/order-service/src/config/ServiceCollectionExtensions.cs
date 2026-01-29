@@ -1,6 +1,6 @@
-using Azure.Identity;
+using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Options;
 using OrderService.Api.Domain;
 using OrderService.Api.Repositories;
 using OrderService.Api.Services;
@@ -21,21 +21,27 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IOrderProcessingService, OrderProcessingService>();
 
-        services.AddAzureClients(builder =>
+        services.AddOptions<KafkaOptions>()
+            .Bind(configuration.GetSection("Messaging:Kafka"))
+            .ValidateDataAnnotations()
+            .Validate(options => !string.IsNullOrWhiteSpace(options.BootstrapServers), "Kafka bootstrap servers are required")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.OrderTopic), "Kafka order topic is required")
+            .ValidateOnStart();
+
+        services.AddSingleton<IProducer<string, string>>(sp =>
         {
-            var eventHubNamespace = configuration["Messaging:EventHubs:Namespace"];
-            if (!string.IsNullOrWhiteSpace(eventHubNamespace))
+            var options = sp.GetRequiredService<IOptions<KafkaOptions>>().Value;
+            var config = new ProducerConfig
             {
-                builder.AddEventHubProducerClientWithNamespace(eventHubNamespace);
-            }
-        }, credentialFactory: _ => new DefaultAzureCredential());
+                BootstrapServers = options.BootstrapServers,
+                Acks = Acks.All,
+                EnableIdempotence = true,
+                MessageTimeoutMs = 30000
+            };
+
+            return new ProducerBuilder<string, string>(config).Build();
+        });
 
         return services;
-    }
-
-    private static IAzureClientBuilder<Azure.Messaging.EventHubs.Producer.EventHubProducerClient, Azure.Messaging.EventHubs.Producer.EventHubProducerClientOptions>
-        AddEventHubProducerClientWithNamespace(this AzureClientFactoryBuilder builder, string fullyQualifiedNamespace)
-    {
-        return builder.AddEventHubProducerClientWithNamespace(fullyQualifiedNamespace, new Azure.Messaging.EventHubs.Producer.EventHubProducerClientOptions());
     }
 }
